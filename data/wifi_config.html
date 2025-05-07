@@ -78,6 +78,7 @@
         <ul class="dropdown-menu dropdown-menu-end">
           <li><a class="dropdown-item" href="index.html">Dashboard</a></li>
           <li><a class="dropdown-item active" href="wifi_config.html">WiFi Configuration</a></li>
+          <li><a class="dropdown-item" href="reset_wifi.html">Reset WiFi</a></li>
         </ul>
       </div>
     </div>
@@ -95,14 +96,6 @@
       
       <button type="submit">Connect</button>
     </form>
-    
-    <div class="networks">
-      <p>Available Networks:</p>
-      <div id="network-list">
-        <!-- Networks will be populated here -->
-      </div>
-    </div>
-  </div>
   
   <script>
     // Function to populate networks (would be used if scanning was implemented)
@@ -117,21 +110,7 @@
         };
         list.appendChild(div);
       });
-    }
-    
-    // For demo, populate with placeholder networks
-    populateNetworks(['Loading networks...']);
-    
-    // Actual network scanning would be implemented server-side
-    fetch('/scan-networks')
-      .then(response => response.json())
-      .then(networks => {
-        document.getElementById('network-list').innerHTML = '';
-        populateNetworks(networks);
-      })
-      .catch(error => {
-        console.error('Error scanning networks:', error);
-      });
+    }    
   </script>
   
   <!-- Bootstrap JavaScript Bundle with Popper -->

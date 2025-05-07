@@ -24,7 +24,6 @@ OneWire oneWire(oneWireBus);
 DallasTemperature sensors(&oneWire);
 
 // File paths to save data
-const char* jsonFilePath = "/temperature_log.json";
 const char* csvFilePath = "/temperature_log.csv";
 
 // Create AsyncWebServer object on port 80
@@ -212,20 +211,6 @@ void setup() {
   server.on("/resetwifi", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(200, "text/plain", "WiFi settings reset. Restart device to configure new network.");
     wifiHandler.resetSettings();
-  });
-  
-  // Add routes for data files
-  server.on("/data/json", HTTP_GET, [](AsyncWebServerRequest *request) {
-    // Check if file exists
-    if (!LittleFS.exists(jsonFilePath)) {
-      // Create an empty array if file doesn't exist
-      File file = LittleFS.open(jsonFilePath, "w");
-      if (file) {
-        file.print("[]");
-        file.close();
-      }
-    }
-    request->send(LittleFS, jsonFilePath, "application/json");
   });
   
   server.on("/data/csv", HTTP_GET, [](AsyncWebServerRequest *request) {

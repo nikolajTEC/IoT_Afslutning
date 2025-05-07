@@ -42,6 +42,11 @@
     .reset-btn:hover {
       background-color: #0055aa;
     }
+    .network-info {
+      font-size: 16px;
+      margin-top: 15px;
+      color: #333;
+    }
   </style>
 </head>
 <body>
@@ -56,49 +61,53 @@
         <ul class="dropdown-menu dropdown-menu-end">
           <li><a class="dropdown-item" href="index.html">Dashboard</a></li>
           <li><a class="dropdown-item" href="wifi_config.html">WiFi Configuration</a></li>
+          <li><a class="dropdown-item active" href="reset_wifi.html">Reset WiFi</a></li>
         </ul>
       </div>
     </div>
   </nav>
 
   <div class="container">
-    <h1>WiFi Configuration Saved</h1>
-    <p class="success">Your settings have been saved successfully!</p>
-    <p>The device will now attempt to connect to your WiFi network.</p>
-    <p>If connection is successful, this access point will close.</p>
-    <p>Please click the button below to restart the device.</p>
-    <button id="resetButton" class="reset-btn">Restart Device</button>
+    <h1>Wifi Info</h1>
+
+    <!-- Network info will be displayed here -->
+    <div id="networkInfo" class="network-info">Loading network info...</div>
+
+    <!-- Reset button -->
+    <button id="resetButton" class="reset-btn">Reset network config</button>
   </div>
   
   <script>
+    // Load and display network info
+    async function loadNetworkInfo() {
+      try {
+        const response = await fetch('/network');
+        const html = await response.text();
+        document.getElementById('networkInfo').innerHTML = html;
+      } catch (err) {
+        document.getElementById('networkInfo').innerText = 'Failed to load network info.';
+        console.error(err);
+      }
+    }
+
+    loadNetworkInfo();
+
+    // Handle reset button
     document.getElementById('resetButton').addEventListener('click', function() {
-      // Display a countdown message
       this.disabled = true;
-      this.textContent = 'Restarting in 5...';
-      
-      let count = 4;
-      const countdown = setInterval(() => {
-        if (count > 0) {
-          this.textContent = `Restarting in ${count}...`;
-          count--;
-        } else {
-          clearInterval(countdown);
-          this.textContent = 'Restarting now...';
+      this.textContent = 'Restarting now...';
           
-          // Send request to restart endpoint
-          fetch('/restart-device')
-            .then(response => {
-              console.log('Device restart initiated');
-            })
-            .catch(error => {
-              console.error('Error restarting device:', error);
-            });
-        }
-      }, 1000);
+      fetch('/resetwifi')
+        .then(response => {
+          console.log('Device restart initiated');
+        })
+        .catch(error => {
+          console.error('Error restarting device:', error);
+        });        
     });
   </script>
   
-  <!-- Bootstrap JavaScript Bundle with Popper -->
+  <!-- Bootstrap JS -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
