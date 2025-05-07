@@ -1,0 +1,144 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <title>ESP32 WiFi Configuration</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f7f7f7;
+    }
+    .container {
+      max-width: 400px;
+      margin: 20px auto;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: #0066cc;
+      font-size: 24px;
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #0066cc;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      width: 100%;
+    }
+    button:hover {
+      background-color: #0055aa;
+    }
+    .networks {
+      margin-top: 20px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .network {
+      padding: 8px;
+      cursor: pointer;
+      border-bottom: 1px solid #eee;
+    }
+    .network:hover {
+      background-color: #f5f5f5;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Bar with Burger Menu -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">ESP32 Monitor</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav">
+          <li class="nav-item">
+            <a class="nav-link" href="index.html">Dashboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link active" aria-current="page" href="wifi_config.html">WiFi Configuration</a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1>ESP32 Temperature Sensor</h1>
+    <p>Please configure your WiFi connection:</p>
+    <form action="/save-config" method="post">
+      <label for="ssid">Network Name (SSID):</label>
+      <input type="text" id="ssid" name="ssid" required>
+      
+      <label for="password">Password:</label>
+      <input type="password" id="password" name="password">
+      
+      <button type="submit">Connect</button>
+    </form>
+    
+    <div class="networks">
+      <p>Available Networks:</p>
+      <div id="network-list">
+        <!-- Networks will be populated here -->
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // Function to populate networks (would be used if scanning was implemented)
+    function populateNetworks(networks) {
+      const list = document.getElementById('network-list');
+      networks.forEach(network => {
+        const div = document.createElement('div');
+        div.className = 'network';
+        div.textContent = network;
+        div.onclick = function() {
+          document.getElementById('ssid').value = network;
+        };
+        list.appendChild(div);
+      });
+    }
+    
+    // For demo, populate with placeholder networks
+    populateNetworks(['Loading networks...']);
+    
+    // Actual network scanning would be implemented server-side
+    fetch('/scan-networks')
+      .then(response => response.json())
+      .then(networks => {
+        document.getElementById('network-list').innerHTML = '';
+        populateNetworks(networks);
+      })
+      .catch(error => {
+        console.error('Error scanning networks:', error);
+      });
+  </script>
+  
+  <!-- Bootstrap JavaScript Bundle with Popper -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

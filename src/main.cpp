@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include "LittleFS.h"
@@ -7,10 +6,11 @@
 #include <OneWire.h>
 #include <DallasTemperature.h>
 #include "time.h"
+#include <DNSServer.h>
+#include "WiFiHandler.h"
 
-// Replace with your network credentials
-const char* ssid = "PassW0rd";
-const char* password = "28368557";
+// Create WiFi handler
+WiFiHandler wifiHandler;
 
 // NTP Server settings
 const char* ntpServer = "pool.ntp.org";
@@ -45,6 +45,7 @@ struct tm timeinfo;
 char timeStringBuff[50]; // Buffer for formatted time
 unsigned long lastTimeUpdate = 0;
 const unsigned long TimeUpdateInterval = 3600000;
+
 // Init DS18B20
 void initDS18B20() {
   sensors.begin();
@@ -121,18 +122,6 @@ void initLittleFS() {
   Serial.println("LittleFS mounted successfully");
 }
 
-// Initialize WiFi
-void initWiFi() {
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi ..");
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print('.');
-    delay(1000);
-  }
-  Serial.println(WiFi.localIP());
-}
-
 // Initialize Time
 void initTime() {
   // Init and get the time
@@ -191,15 +180,38 @@ void initWebSocket() {
 void setup() {
   Serial.begin(115200);
   
+  // Initialize components
   initDS18B20();
-  initWiFi();
   initLittleFS();
+  
+  // Initialize WiFi with dedicated handler
+  if (wifiHandler.begin()) {
+    Serial.println("Connected to WiFi!");
+    Serial.print("IP Address: ");
+    Serial.println(wifiHandler.getIP());
+  } else {
+    Serial.println("Running in configuration mode");
+  }
+  
   initTime();
   initWebSocket();
   
   // Web Server Root URL
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     request->send(LittleFS, "/index.html", "text/html");
+  });
+  
+  // Add route to display network info
+  server.on("/network", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String networkInfo = "SSID: " + wifiHandler.getSSID() + "<br>";
+    networkInfo += "IP Address: " + wifiHandler.getIP() + "<br>";
+    request->send(200, "text/html", networkInfo);
+  });
+  
+  // Add route to reset WiFi settings
+  server.on("/resetwifi", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "WiFi settings reset. Restart device to configure new network.");
+    wifiHandler.resetSettings();
   });
   
   // Add routes for data files
@@ -236,15 +248,22 @@ void setup() {
 }
 
 void loop() {
+  // Handle regular WiFi events (reconnection, etc.)
+  wifiHandler.handleEvents();
+  
+  // Collect and send sensor data
   if ((millis() - lastTime) > timerDelay) {
     String sensorReadings = getSensorReadings();
     Serial.println(sensorReadings);
     notifyClients(sensorReadings);
     lastTime = millis();
   }
+  
+  // Update time occasionally
   if (millis() - lastTimeUpdate >= TimeUpdateInterval) {
     lastTimeUpdate = millis();
     initTime();
   }
+  
   ws.cleanupClients();
 }
