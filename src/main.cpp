@@ -238,9 +238,16 @@ void loop() {
   
   // Collect and send sensor data
   if ((millis() - lastTime) > timerDelay) {
-    String sensorReadings = getSensorReadings();
-    Serial.println(sensorReadings);
-    notifyClients(sensorReadings);
+    // Check if we have valid time before collecting and sending data
+    if (getLocalTime(&timeinfo)) {
+      String sensorReadings = getSensorReadings();
+      Serial.println(sensorReadings);
+      notifyClients(sensorReadings);
+    } else {
+      Serial.println("Skipping sensor reading - no valid timestamp available");
+      // Try to reinitialize time
+      initTime();
+    }
     lastTime = millis();
   }
   
