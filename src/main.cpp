@@ -14,7 +14,7 @@ const char* password = "28368557";
 
 // NTP Server settings
 const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = 0;      // Change this to your GMT offset (seconds)
+const long  gmtOffset_sec = 3600;      // GMT offset (seconds)
 const int   daylightOffset_sec = 3600; // Change this for Daylight Saving Time
 
 // DS18B20 sensor setup
@@ -43,7 +43,8 @@ unsigned long timerDelay = 3000;
 // Time variables
 struct tm timeinfo;
 char timeStringBuff[50]; // Buffer for formatted time
-
+unsigned long lastTimeUpdate = 0;
+const unsigned long TimeUpdateInterval = 3600000;
 // Init DS18B20
 void initDS18B20() {
   sensors.begin();
@@ -240,6 +241,10 @@ void loop() {
     Serial.println(sensorReadings);
     notifyClients(sensorReadings);
     lastTime = millis();
+  }
+  if (millis() - lastTimeUpdate >= TimeUpdateInterval) {
+    lastTimeUpdate = millis();
+    initTime();
   }
   ws.cleanupClients();
 }
