@@ -45,7 +45,7 @@ JSONVar readings;
 
 // Timer variables
 unsigned long lastTime = 0;
-unsigned long timerDelay = 3000;
+unsigned long timerDelay = 3000; //ændrer til 300000 for 5min
 
 // Time variables
 struct tm timeinfo;
@@ -173,9 +173,6 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
     case WS_EVT_DATA:
       handleWebSocketMessage(arg, data, len);
       break;
-    case WS_EVT_PONG:
-    case WS_EVT_ERROR:
-      break;
   }
 }
 
@@ -192,6 +189,81 @@ int buttonState;            // Current stable button state
 int lastButtonState;        // Last stable button state
 int buttonDefaultState;     // The default state of the button (without pressing)
 
+void handleButton() {
+// Read the current raw button state
+int reading = digitalRead(BUTTON_PIN);
+
+// If the reading changed from the last reading, reset debounce timer
+if (reading != lastButtonState) {
+  lastDebounceTime = millis();
+}
+
+// If enough time has passed since the last change, consider the state stable
+if ((millis() - lastDebounceTime) > DEBOUNCE_TIME) {
+  // Only update buttonState if it's different from the stable reading
+  if (buttonState != reading) {
+    buttonState = reading;
+
+    // Button is pressed when state is DIFFERENT from default
+    if (buttonState != buttonDefaultState && !buttonIsHeld) {
+      lastPrintTime = millis();
+      secondsHeld = 0;
+      buttonIsHeld = true;
+      Serial.println("Button Pressed");
+    }
+
+    // Button is released when state returns to default
+    if (buttonState == buttonDefaultState && buttonIsHeld) {
+      buttonIsHeld = false;
+      Serial.println("Button Released");
+    }
+  }
+}
+
+// If button is held, count and print seconds
+if (buttonIsHeld) {
+  if (millis() - lastPrintTime >= 1000) {
+    secondsHeld++;
+    if (secondsHeld == 10) {
+      // Call RemoveCsvFile through WebRoutes class and reset WiFi settings
+      // This needs to be added to WebRoutes or kept here
+      LittleFS.remove(csvFilePath);
+      wifiHandler.resetSettings();
+      Serial.print("System reset");
+    }
+    else if (secondsHeld < 10){
+      Serial.print("Button held for ");
+      Serial.print(secondsHeld);
+      Serial.println(" seconds");
+    }
+    lastPrintTime = millis();
+  }
+}
+
+// Save the current reading for the next loop iteration
+lastButtonState = reading;
+}
+
+void handleSensorData(){
+  // Check if we have valid time before collecting and sending data
+  if (getLocalTime(&timeinfo)) {
+    String sensorReadings = getSensorReadings();
+    Serial.println(sensorReadings);
+    notifyClients(sensorReadings);
+  } else {
+    Serial.println("Skipping sensor reading - no valid timestamp available");
+    // Try to reinitialize time
+    initTime();
+  }
+  }
+
+
+
+
+
+
+
+
 void setup() {
   Serial.begin(115200);
 
@@ -200,11 +272,6 @@ void setup() {
   buttonDefaultState = digitalRead(BUTTON_PIN);
   lastButtonState = buttonDefaultState;
   buttonState = buttonDefaultState;
-
-  Serial.print("Button default state detected as: ");
-  Serial.println(buttonDefaultState == HIGH ? "HIGH" : "LOW");
-  Serial.println("System will consider button pressed when state is DIFFERENT from default");
-  Serial.println("Ready - waiting for button press");
 
   // Initialize components
   initDS18B20();
@@ -219,33 +286,24 @@ void setup() {
     Serial.println("Running in configuration mode");
   }
   
+  // Initialize and setup web routes
   webRoutes.initialize();
 
   initTime();
   initWebSocket();
   
-  // Initialize and setup web routes
   
   // Start server
   server.begin();
 }
 
 void loop() {
-  // Handle regular WiFi events (reconnection, etc.)
+  // Handle based on wifi status. eg. opens as ap if connection is lost
   wifiHandler.handleEvents();
   
   // Collect and send sensor data
   if ((millis() - lastTime) > timerDelay) {
-    // Check if we have valid time before collecting and sending data
-    if (getLocalTime(&timeinfo)) {
-      String sensorReadings = getSensorReadings();
-      Serial.println(sensorReadings);
-      notifyClients(sensorReadings);
-    } else {
-      Serial.println("Skipping sensor reading - no valid timestamp available");
-      // Try to reinitialize time
-      initTime();
-    }
+    handleSensorData();
     lastTime = millis();
   }
   
@@ -254,59 +312,9 @@ void loop() {
     lastTimeUpdate = millis();
     initTime();
   }
-  
-  // Read the current raw button state
-  int reading = digitalRead(BUTTON_PIN);
 
-  // If the reading changed from the last reading, reset debounce timer
-  if (reading != lastButtonState) {
-    lastDebounceTime = millis();
-  }
-
-  // If enough time has passed since the last change, consider the state stable
-  if ((millis() - lastDebounceTime) > DEBOUNCE_TIME) {
-    // Only update buttonState if it's different from the stable reading
-    if (buttonState != reading) {
-      buttonState = reading;
-
-      // Button is pressed when state is DIFFERENT from default
-      if (buttonState != buttonDefaultState && !buttonIsHeld) {
-        lastPrintTime = millis();
-        secondsHeld = 0;
-        buttonIsHeld = true;
-        Serial.println("Button Pressed");
-      }
-
-      // Button is released when state returns to default
-      if (buttonState == buttonDefaultState && buttonIsHeld) {
-        buttonIsHeld = false;
-        Serial.println("Button Released");
-      }
-    }
-  }
-
-  // If button is held, count and print seconds
-  if (buttonIsHeld) {
-    if (millis() - lastPrintTime >= 1000) {
-      secondsHeld++;
-      if (secondsHeld == 10) {
-        // Call RemoveCsvFile through WebRoutes class and reset WiFi settings
-        // This needs to be added to WebRoutes or kept here
-        LittleFS.remove(csvFilePath);
-        wifiHandler.resetSettings();
-        Serial.print("System reset");
-      }
-      else if (secondsHeld < 10){
-        Serial.print("Button held for ");
-        Serial.print(secondsHeld);
-        Serial.println(" seconds");
-      }
-      lastPrintTime = millis();
-    }
-  }
-
-  // Save the current reading for the next loop iteration
-  lastButtonState = reading;
+  handleButton();
 
   ws.cleanupClients();
 }
+
