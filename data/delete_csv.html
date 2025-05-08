@@ -1,0 +1,97 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <title>File Management</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Bootstrap CSS -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #f7f7f7;
+      text-align: center;
+    }
+    .container {
+      max-width: 400px;
+      margin: 0 auto;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: #0066cc;
+    }
+    .status {
+      font-size: 18px;
+      margin: 20px 0;
+    }
+    .delete-btn {
+      background-color: #dc3545;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 20px;
+    }
+    .delete-btn:hover {
+      background-color: #c82333;
+    }
+    .status-info {
+      font-size: 16px;
+      margin-top: 15px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>File Management</h1>
+
+    <!-- Status info will be displayed here -->
+    <div id="statusInfo" class="status-info">Ready to delete file</div>
+
+    <!-- Delete button -->
+    <button id="deleteCsvButton" class="delete-btn">Delete CSV File</button>
+  </div>
+   
+  <script>
+    // Handle delete button
+    document.getElementById('deleteCsvButton').addEventListener('click', function() {
+      this.disabled = true;
+      this.textContent = 'Deleting...';
+      
+      document.getElementById('statusInfo').textContent = 'Processing request...';
+           
+      fetch('/delete-file')
+        .then(response => {
+          if (response.ok) {
+            document.getElementById('statusInfo').textContent = 'File deleted successfully!';
+            this.textContent = 'File Deleted';
+          } else {
+            document.getElementById('statusInfo').textContent = 'Error deleting file.';
+            this.textContent = 'Try Again';
+            this.disabled = false;
+          }
+        })
+        .catch(error => {
+          console.error('Error deleting file:', error);
+          document.getElementById('statusInfo').textContent = 'Failed to delete file. Check console for details.';
+          this.textContent = 'Try Again';
+          this.disabled = false;
+        });         
+    });
+  </script>
+   
+  <!-- Bootstrap JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+  
+  <!-- Navbar Script -->
+  <script src="navbar.js"></script>
+</body>
+</html>

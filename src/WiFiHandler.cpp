@@ -208,7 +208,7 @@ bool WiFiHandler::loadWiFiConfig() {
     password = (const char*)wifiConfig["password"];
     return true;
   }
-  
+
   return false;
 }
 
@@ -257,3 +257,4 @@ void WiFiHandler::handleEvents() {
     }
   }
 }
+

@@ -9,6 +9,9 @@
 #include <DNSServer.h>
 #include "WiFiHandler.h"
 
+#define BUTTON_PIN 35
+#define DEBOUNCE_TIME 50
+
 // Create WiFi handler
 WiFiHandler wifiHandler;
 
@@ -20,6 +23,9 @@ const int   daylightOffset_sec = 3600; // Change this for Daylight Saving Time
 // DS18B20 sensor setup
 // GPIO where the DS18B20 is connected to
 const int oneWireBus = 4;    // Change this to your actual GPIO pin
+
+
+
 OneWire oneWire(oneWireBus);
 DallasTemperature sensors(&oneWire);
 
@@ -176,9 +182,40 @@ void initWebSocket() {
   server.addHandler(&ws);
 }
 
+void RemoveCsvFile() {
+  if (LittleFS.exists(csvFilePath)) {
+    if (LittleFS.remove(csvFilePath)) {
+      Serial.println("File successfully removed.");
+    } else {
+      Serial.println("Failed to remove the file.");
+    }
+  } else {
+    Serial.println("File does not exist.");
+  }
+}
+
+unsigned long lastDebounceTime = 0;
+unsigned long lastPrintTime = 0;
+int secondsHeld = 0;
+bool buttonIsHeld = false;
+int buttonState;            // Current stable button state
+int lastButtonState;        // Last stable button state
+int buttonDefaultState;     // The default state of the button (without pressing)
+
 void setup() {
   Serial.begin(115200);
-  
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  buttonDefaultState = digitalRead(BUTTON_PIN);
+  lastButtonState = buttonDefaultState;
+  buttonState = buttonDefaultState;
+
+  Serial.print("Button default state detected as: ");
+  Serial.println(buttonDefaultState == HIGH ? "HIGH" : "LOW");
+  Serial.println("System will consider button pressed when state is DIFFERENT from default");
+  Serial.println("Ready - waiting for button press");
+
   // Initialize components
   initDS18B20();
   initLittleFS();
@@ -213,6 +250,11 @@ void setup() {
     wifiHandler.resetSettings();
   });
   
+  server.on("/delete-file", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send(200, "text/plain", "Csv file deleted");
+    RemoveCsvFile();
+  });
+
   server.on("/data/csv", HTTP_GET, [](AsyncWebServerRequest *request) {
     // Check if file exists
     if (!LittleFS.exists(csvFilePath)) {
@@ -257,5 +299,59 @@ void loop() {
     initTime();
   }
   
+// Read the current raw button state
+int reading = digitalRead(BUTTON_PIN);
+
+// If the reading changed from the last reading, reset debounce timer
+if (reading != lastButtonState) {
+  lastDebounceTime = millis();
+}
+
+// If enough time has passed since the last change, consider the state stable
+if ((millis() - lastDebounceTime) > DEBOUNCE_TIME) {
+  // Only update buttonState if it's different from the stable reading
+  if (buttonState != reading) {
+    buttonState = reading;
+
+    // Button is pressed when state is DIFFERENT from default
+    if (buttonState != buttonDefaultState && !buttonIsHeld) {
+      lastPrintTime = millis();
+      secondsHeld = 0;
+      buttonIsHeld = true;
+      Serial.println("Button Pressed");
+    }
+
+    // Button is released when state returns to default
+    if (buttonState == buttonDefaultState && buttonIsHeld) {
+      buttonIsHeld = false;
+      Serial.println("Button Released");
+    }
+  }
+}
+
+// If button is held, count and print seconds
+if (buttonIsHeld) {
+  if (millis() - lastPrintTime >= 1000) {
+    secondsHeld++;
+    if (secondsHeld == 10) {
+      // LittleFS.begin(true);
+      // LittleFS.format(); sletter hele configuration, så man skal re builde
+      RemoveCsvFile();
+      wifiHandler.resetSettings();
+      Serial.print("System deleted");
+    }
+    else if (secondsHeld < 10){
+      Serial.print("Button held for ");
+      Serial.print(secondsHeld);
+      Serial.println(" seconds");
+    }
+    lastPrintTime = millis();
+  }
+
+}
+
+// Save the current reading for the next loop iteration
+lastButtonState = reading;
+
   ws.cleanupClients();
 }
