@@ -8,12 +8,19 @@
 #include "time.h"
 #include <DNSServer.h>
 #include "WiFiHandler.h"
+#include "WebRoutes.h"
 
 #define BUTTON_PIN 35
 #define DEBOUNCE_TIME 50
 
 // Create WiFi handler
 WiFiHandler wifiHandler;
+
+// Create AsyncWebServer object on port 80
+AsyncWebServer server(80);
+
+// Create WebRoutes object
+WebRoutes webRoutes(server, wifiHandler);
 
 // NTP Server settings
 const char* ntpServer = "pool.ntp.org";
@@ -24,16 +31,11 @@ const int   daylightOffset_sec = 3600; // Change this for Daylight Saving Time
 // GPIO where the DS18B20 is connected to
 const int oneWireBus = 4;    // Change this to your actual GPIO pin
 
-
-
 OneWire oneWire(oneWireBus);
 DallasTemperature sensors(&oneWire);
 
 // File paths to save data
 const char* csvFilePath = "/temperature_log.csv";
-
-// Create AsyncWebServer object on port 80
-AsyncWebServer server(80);
 
 // Create a WebSocket object
 AsyncWebSocket ws("/ws");
@@ -182,18 +184,6 @@ void initWebSocket() {
   server.addHandler(&ws);
 }
 
-void RemoveCsvFile() {
-  if (LittleFS.exists(csvFilePath)) {
-    if (LittleFS.remove(csvFilePath)) {
-      Serial.println("File successfully removed.");
-    } else {
-      Serial.println("Failed to remove the file.");
-    }
-  } else {
-    Serial.println("File does not exist.");
-  }
-}
-
 unsigned long lastDebounceTime = 0;
 unsigned long lastPrintTime = 0;
 int secondsHeld = 0;
@@ -229,46 +219,12 @@ void setup() {
     Serial.println("Running in configuration mode");
   }
   
+  webRoutes.initialize();
+
   initTime();
   initWebSocket();
   
-  // Web Server Root URL
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(LittleFS, "/index.html", "text/html");
-  });
-  
-  // Add route to display network info
-  server.on("/network", HTTP_GET, [](AsyncWebServerRequest *request) {
-    String networkInfo = "SSID: " + wifiHandler.getSSID() + "<br>";
-    networkInfo += "IP Address: " + wifiHandler.getIP() + "<br>";
-    request->send(200, "text/html", networkInfo);
-  });
-  
-  // Add route to reset WiFi settings
-  server.on("/resetwifi", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(200, "text/plain", "WiFi settings reset. Restart device to configure new network.");
-    wifiHandler.resetSettings();
-  });
-  
-  server.on("/delete-file", HTTP_GET, [](AsyncWebServerRequest *request) {
-    request->send(200, "text/plain", "Csv file deleted");
-    RemoveCsvFile();
-  });
-
-  server.on("/data/csv", HTTP_GET, [](AsyncWebServerRequest *request) {
-    // Check if file exists
-    if (!LittleFS.exists(csvFilePath)) {
-      // Create an empty file with header if doesn't exist
-      File file = LittleFS.open(csvFilePath, "w");
-      if (file) {
-        file.println("timestamp,temperature");
-        file.close();
-      }
-    }
-    request->send(LittleFS, csvFilePath, "text/csv");
-  });
-  
-  server.serveStatic("/", LittleFS, "/");
+  // Initialize and setup web routes
   
   // Start server
   server.begin();
@@ -299,59 +255,58 @@ void loop() {
     initTime();
   }
   
-// Read the current raw button state
-int reading = digitalRead(BUTTON_PIN);
+  // Read the current raw button state
+  int reading = digitalRead(BUTTON_PIN);
 
-// If the reading changed from the last reading, reset debounce timer
-if (reading != lastButtonState) {
-  lastDebounceTime = millis();
-}
+  // If the reading changed from the last reading, reset debounce timer
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();
+  }
 
-// If enough time has passed since the last change, consider the state stable
-if ((millis() - lastDebounceTime) > DEBOUNCE_TIME) {
-  // Only update buttonState if it's different from the stable reading
-  if (buttonState != reading) {
-    buttonState = reading;
+  // If enough time has passed since the last change, consider the state stable
+  if ((millis() - lastDebounceTime) > DEBOUNCE_TIME) {
+    // Only update buttonState if it's different from the stable reading
+    if (buttonState != reading) {
+      buttonState = reading;
 
-    // Button is pressed when state is DIFFERENT from default
-    if (buttonState != buttonDefaultState && !buttonIsHeld) {
+      // Button is pressed when state is DIFFERENT from default
+      if (buttonState != buttonDefaultState && !buttonIsHeld) {
+        lastPrintTime = millis();
+        secondsHeld = 0;
+        buttonIsHeld = true;
+        Serial.println("Button Pressed");
+      }
+
+      // Button is released when state returns to default
+      if (buttonState == buttonDefaultState && buttonIsHeld) {
+        buttonIsHeld = false;
+        Serial.println("Button Released");
+      }
+    }
+  }
+
+  // If button is held, count and print seconds
+  if (buttonIsHeld) {
+    if (millis() - lastPrintTime >= 1000) {
+      secondsHeld++;
+      if (secondsHeld == 10) {
+        // Call RemoveCsvFile through WebRoutes class and reset WiFi settings
+        // This needs to be added to WebRoutes or kept here
+        LittleFS.remove(csvFilePath);
+        wifiHandler.resetSettings();
+        Serial.print("System reset");
+      }
+      else if (secondsHeld < 10){
+        Serial.print("Button held for ");
+        Serial.print(secondsHeld);
+        Serial.println(" seconds");
+      }
       lastPrintTime = millis();
-      secondsHeld = 0;
-      buttonIsHeld = true;
-      Serial.println("Button Pressed");
-    }
-
-    // Button is released when state returns to default
-    if (buttonState == buttonDefaultState && buttonIsHeld) {
-      buttonIsHeld = false;
-      Serial.println("Button Released");
     }
   }
-}
 
-// If button is held, count and print seconds
-if (buttonIsHeld) {
-  if (millis() - lastPrintTime >= 1000) {
-    secondsHeld++;
-    if (secondsHeld == 10) {
-      // LittleFS.begin(true);
-      // LittleFS.format(); sletter hele configuration, så man skal re builde
-      RemoveCsvFile();
-      wifiHandler.resetSettings();
-      Serial.print("System deleted");
-    }
-    else if (secondsHeld < 10){
-      Serial.print("Button held for ");
-      Serial.print(secondsHeld);
-      Serial.println(" seconds");
-    }
-    lastPrintTime = millis();
-  }
-
-}
-
-// Save the current reading for the next loop iteration
-lastButtonState = reading;
+  // Save the current reading for the next loop iteration
+  lastButtonState = reading;
 
   ws.cleanupClients();
 }

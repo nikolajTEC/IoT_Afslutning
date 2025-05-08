@@ -1,5 +1,5 @@
 #include "WiFiHandler.h"
-
+#include "WebRoutes.h"
 WiFiHandler::WiFiHandler() {
   configServer = nullptr;
   apIP = IPAddress(192, 168, 4, 1);
@@ -78,7 +78,7 @@ void WiFiHandler::startAP(const char* apName) {
   setupConfigPortal();
 }
 
-void WiFiHandler::setupConfigPortal() {
+void WiFiHandler::setupConfigPortal() {   
   // Create server if it doesn't exist
   if (!configServer) {
     configServer = new AsyncWebServer(80);

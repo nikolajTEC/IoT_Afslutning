@@ -17,7 +17,7 @@ public:
   bool begin();
   
   // Start the configuration portal in AP mode
-  void startAP(const char* apName = "ESP32_TempSensor");
+  void startAP(const char* apName = "NikoCars");
   
   // Reset WiFi settings
   void resetSettings();
@@ -33,6 +33,9 @@ public:
   
   // Handle WiFi events - call this in loop()
   void handleEvents();
+
+  // Save WiFi configuration to flash
+  bool saveWiFiConfig(String ssid, String password);
   
 private:
   AsyncWebServer* configServer;
@@ -54,10 +57,7 @@ private:
   bool connectToWiFi();
   
   // Load HTML content from file
-  String loadHTMLFromFile(const char* filename);
-  
-  // Save WiFi configuration to flash
-  bool saveWiFiConfig(String ssid, String password);
+  String loadHTMLFromFile(const char* filename);  
   
   // Load WiFi configuration from flash
   bool loadWiFiConfig();
