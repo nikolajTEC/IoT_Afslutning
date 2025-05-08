@@ -52,6 +52,15 @@ char timeStringBuff[50];
 unsigned long lastTimeUpdate = 0;
 const unsigned long TimeUpdateInterval = 3600000; // 1 hour interval
 
+// Button handling variables
+unsigned long lastDebounceTime = 0;
+unsigned long lastPrintTime = 0;
+int secondsHeld = 0;
+bool buttonIsHeld = false;
+int buttonState;
+int lastButtonState;
+int buttonDefaultState;
+
 // Initialize the DS18B20 sensor
 void initDS18B20() {
   sensors.begin();
@@ -176,15 +185,8 @@ void initWebSocket() {
   server.addHandler(&ws);
 }
 
-// Button debounce and long-press handling
-unsigned long lastDebounceTime = 0;
-unsigned long lastPrintTime = 0;
-int secondsHeld = 0;
-bool buttonIsHeld = false;
-int buttonState;
-int lastButtonState;
-int buttonDefaultState;
 
+// Button debounce and long-press handling
 void handleButton() {
   int reading = digitalRead(BUTTON_PIN);
 
