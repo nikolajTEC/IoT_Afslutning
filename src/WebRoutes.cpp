@@ -49,6 +49,7 @@ void WebRoutes::initialize() {
     server.serveStatic("/", LittleFS, "/");
 }
 
+// delete csv file
 void WebRoutes::RemoveCsvFile() {
     if (LittleFS.exists(csvFilePath)) {
         if (LittleFS.remove(csvFilePath)) {

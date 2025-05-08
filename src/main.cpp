@@ -10,73 +10,70 @@
 #include "WiFiHandler.h"
 #include "WebRoutes.h"
 
+// Define GPIO pin for the button and debounce delay
 #define BUTTON_PIN 35
-#define DEBOUNCE_TIME 50
+#define DEBOUNCE_TIME 50 // in milliseconds
 
-// Create WiFi handler
+// Create WiFi handler object
 WiFiHandler wifiHandler;
 
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
-// Create WebRoutes object
+// Create WebRoutes handler object
 WebRoutes webRoutes(server, wifiHandler);
 
-// NTP Server settings
+// NTP server settings for time synchronization
 const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = 3600;      // GMT offset (seconds)
-const int   daylightOffset_sec = 3600; // Change this for Daylight Saving Time
+const long  gmtOffset_sec = 3600;      // GMT offset in seconds
+const int   daylightOffset_sec = 3600; // Offset for daylight savings
 
 // DS18B20 sensor setup
-// GPIO where the DS18B20 is connected to
-const int oneWireBus = 4;    // Change this to your actual GPIO pin
-
+const int oneWireBus = 4; // GPIO pin connected to DS18B20
 OneWire oneWire(oneWireBus);
 DallasTemperature sensors(&oneWire);
 
-// File paths to save data
+// Path to CSV file storing temperature logs
 const char* csvFilePath = "/temperature_log.csv";
 
-// Create a WebSocket object
+// WebSocket object for real-time communication
 AsyncWebSocket ws("/ws");
 
-// Json Variable to Hold Sensor Readings
+// JSON variable to hold sensor readings
 JSONVar readings;
 
 // Timer variables
 unsigned long lastTime = 0;
-unsigned long timerDelay = 3000; //ændrer til 300000 for 5min
+unsigned long timerDelay = 3000; // Delay between readings (ms), change to 300000 for 5 min
 
-// Time variables
+// Time handling variables
 struct tm timeinfo;
-char timeStringBuff[50]; // Buffer for formatted time
+char timeStringBuff[50];
 unsigned long lastTimeUpdate = 0;
-const unsigned long TimeUpdateInterval = 3600000;
+const unsigned long TimeUpdateInterval = 3600000; // 1 hour interval
 
-// Init DS18B20
+// Initialize the DS18B20 sensor
 void initDS18B20() {
   sensors.begin();
   Serial.println("DS18B20 sensor initialized");
 }
 
-// Format time as a string
+// Format time to a readable string
 String getFormattedTime() {
   if(!getLocalTime(&timeinfo)){
     Serial.println("Failed to obtain time");
     return "Time not available";
   }
-  
   strftime(timeStringBuff, sizeof(timeStringBuff), "%Y-%m-%d %H:%M:%S", &timeinfo);
   return String(timeStringBuff);
 }
 
-// Save data to CSV file
+// Save temperature data to CSV file
 void saveToCsvFile(float temperature, String timestamp) {
-  // Append to file
   File file = LittleFS.open(csvFilePath, "a");
-  
+
+  // If file can't be opened for appending, try creating it
   if (!file) {
-    // If file doesn't exist, create and add header
     file = LittleFS.open(csvFilePath, "w");
     if (file) {
       file.println("timestamp,temperature");
@@ -85,8 +82,8 @@ void saveToCsvFile(float temperature, String timestamp) {
       return;
     }
   }
-  
-  // Write data line
+
+  // Write data line to file
   if (file) {
     file.print(timestamp);
     file.print(",");
@@ -98,13 +95,12 @@ void saveToCsvFile(float temperature, String timestamp) {
   }
 }
 
-// Get Sensor Readings and return JSON object
+// Retrieve temperature reading and return as JSON
 String getSensorReadings() {
   sensors.requestTemperatures(); 
   float temperature = sensors.getTempCByIndex(0);
   String timestamp = getFormattedTime();
-  
-  // Check if reading was successful
+
   if (temperature == DEVICE_DISCONNECTED_C) {
     Serial.println("Error: Could not read temperature data");
     readings["temperature"] = "Error";
@@ -112,49 +108,46 @@ String getSensorReadings() {
   } else {
     readings["temperature"] = String(temperature);
     readings["timestamp"] = timestamp;
-    
-    // Save data to files
     saveToCsvFile(temperature, timestamp);
   }
-  
-  String jsonString = JSON.stringify(readings);
-  return jsonString;
+
+  return JSON.stringify(readings);
 }
 
 // Initialize LittleFS
 void initLittleFS() {
   if (!LittleFS.begin(true)) {
     Serial.println("An error has occurred while mounting LittleFS");
+  } else {
+    Serial.println("LittleFS mounted successfully");
   }
-  Serial.println("LittleFS mounted successfully");
 }
 
-// Initialize Time
+// Initialize NTP time
 void initTime() {
-  // Init and get the time
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  
+
   if(!getLocalTime(&timeinfo)){
     Serial.println("Failed to obtain time");
     return;
   }
-  
+
   Serial.println("Time initialized successfully");
   Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
 }
 
+// Notify all connected WebSocket clients with sensor data
 void notifyClients(String sensorReadings) {
   ws.textAll(sensorReadings);
 }
 
+// Handle incoming WebSocket messages
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   AwsFrameInfo *info = (AwsFrameInfo*)arg;
   if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
     data[len] = 0;
     String message = (char*)data;
-    // Check if the message is "getReadings"
     if (message.equals("getReadings")) {
-      // If it is, send current sensor readings
       String sensorReadings = getSensorReadings();
       Serial.println(sensorReadings);
       notifyClients(sensorReadings);
@@ -162,6 +155,7 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
   }
 }
 
+// WebSocket event handler
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
   switch (type) {
     case WS_EVT_CONNECT:
@@ -176,102 +170,87 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
   }
 }
 
+// Initialize WebSocket
 void initWebSocket() {
   ws.onEvent(onEvent);
   server.addHandler(&ws);
 }
 
+// Button debounce and long-press handling
 unsigned long lastDebounceTime = 0;
 unsigned long lastPrintTime = 0;
 int secondsHeld = 0;
 bool buttonIsHeld = false;
-int buttonState;            // Current stable button state
-int lastButtonState;        // Last stable button state
-int buttonDefaultState;     // The default state of the button (without pressing)
+int buttonState;
+int lastButtonState;
+int buttonDefaultState;
 
 void handleButton() {
-// Read the current raw button state
-int reading = digitalRead(BUTTON_PIN);
+  int reading = digitalRead(BUTTON_PIN);
 
-// If the reading changed from the last reading, reset debounce timer
-if (reading != lastButtonState) {
-  lastDebounceTime = millis();
-}
+  if (reading != lastButtonState) {
+    lastDebounceTime = millis();
+  }
 
-// If enough time has passed since the last change, consider the state stable
-if ((millis() - lastDebounceTime) > DEBOUNCE_TIME) {
-  // Only update buttonState if it's different from the stable reading
-  if (buttonState != reading) {
-    buttonState = reading;
+  if ((millis() - lastDebounceTime) > DEBOUNCE_TIME) {
+    if (buttonState != reading) {
+      buttonState = reading;
 
-    // Button is pressed when state is DIFFERENT from default
-    if (buttonState != buttonDefaultState && !buttonIsHeld) {
+      if (buttonState != buttonDefaultState && !buttonIsHeld) {
+        lastPrintTime = millis();
+        secondsHeld = 0;
+        buttonIsHeld = true;
+        Serial.println("Button Pressed");
+      }
+
+      if (buttonState == buttonDefaultState && buttonIsHeld) {
+        buttonIsHeld = false;
+        Serial.println("Button Released");
+      }
+    }
+  }
+
+  if (buttonIsHeld) {
+    if (millis() - lastPrintTime >= 1000) {
+      secondsHeld++;
+      if (secondsHeld == 10) {
+        LittleFS.remove(csvFilePath);
+        wifiHandler.resetSettings();
+        Serial.println("System reset");
+      } else {
+        Serial.printf("Button held for %d seconds\n", secondsHeld);
+      }
       lastPrintTime = millis();
-      secondsHeld = 0;
-      buttonIsHeld = true;
-      Serial.println("Button Pressed");
-    }
-
-    // Button is released when state returns to default
-    if (buttonState == buttonDefaultState && buttonIsHeld) {
-      buttonIsHeld = false;
-      Serial.println("Button Released");
     }
   }
+
+  lastButtonState = reading;
 }
 
-// If button is held, count and print seconds
-if (buttonIsHeld) {
-  if (millis() - lastPrintTime >= 1000) {
-    secondsHeld++;
-    if (secondsHeld == 10) {
-      // Call RemoveCsvFile through WebRoutes class and reset WiFi settings
-      // This needs to be added to WebRoutes or kept here
-      LittleFS.remove(csvFilePath);
-      wifiHandler.resetSettings();
-      Serial.print("System reset");
-    }
-    else if (secondsHeld < 10){
-      Serial.print("Button held for ");
-      Serial.print(secondsHeld);
-      Serial.println(" seconds");
-    }
-    lastPrintTime = millis();
-  }
-}
-
-// Save the current reading for the next loop iteration
-lastButtonState = reading;
-}
-
-void handleSensorData(){
-  // Check if we have valid time before collecting and sending data
+// Handle sensor data logic, including timestamp verification
+void handleSensorData() {
   if (getLocalTime(&timeinfo)) {
     String sensorReadings = getSensorReadings();
     Serial.println(sensorReadings);
     notifyClients(sensorReadings);
   } else {
     Serial.println("Skipping sensor reading - no valid timestamp available");
-    // Try to reinitialize time
     initTime();
   }
-  }
+}
 
-
+// Main setup function
 void setup() {
   Serial.begin(115200);
 
   pinMode(BUTTON_PIN, INPUT_PULLUP);
-
   buttonDefaultState = digitalRead(BUTTON_PIN);
   lastButtonState = buttonDefaultState;
   buttonState = buttonDefaultState;
 
-  // Initialize components
   initDS18B20();
   initLittleFS();
-  
-  // Initialize WiFi with dedicated handler
+
   if (wifiHandler.begin()) {
     Serial.println("Connected to WiFi!");
     Serial.print("IP Address: ");
@@ -279,29 +258,23 @@ void setup() {
   } else {
     Serial.println("Running in configuration mode");
   }
-  
-  // Initialize and setup web routes
-  webRoutes.initialize();
 
+  webRoutes.initialize();
   initTime();
   initWebSocket();
-  
-  
-  // Start server
+
   server.begin();
 }
 
+// Main loop function
 void loop() {
-  // Handle based on wifi status. eg. opens as ap if connection is lost
   wifiHandler.handleEvents();
-  
-  // Collect and send sensor data
+
   if ((millis() - lastTime) > timerDelay) {
     handleSensorData();
     lastTime = millis();
   }
-  
-  // Update time occasionally
+
   if (millis() - lastTimeUpdate >= TimeUpdateInterval) {
     lastTimeUpdate = millis();
     initTime();
@@ -311,4 +284,3 @@ void loop() {
 
   ws.cleanupClients();
 }
-
