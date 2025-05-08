@@ -67,7 +67,7 @@ Dette projekt drejer sig om en ESP32-baseret temperaturmåler, som registrerer o
 - I PlatformIO, åbn mappen General
 - Tryk på "Upload and Monitor"
 - Programmet er nu startet
-- Programmet aflæser nu data fra temperatur måleren, og gemmer i CSV fil, hvis den har adgang til NCP
+- Programmet aflæser nu data fra temperatur måleren, og gemmer i CSV fil, hvis den har adgang til NTP
 
 # Forbindelse til WiFiet
 - Åbn din internetadgange
