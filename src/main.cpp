@@ -44,7 +44,7 @@ JSONVar readings;
 
 // Timer variables
 unsigned long lastTime = 0;
-unsigned long timerDelay = 3000; // Delay between readings (ms), change to 300000 for 5 min
+unsigned long timerDelay = 300000; // Delay between readings (ms), change to 300000 for 5 min
 
 // Time handling variables
 struct tm timeinfo;
